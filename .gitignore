@@ -56,11 +56,12 @@ Thumbs.db
 *.obj
 
 # temp files
-*tmp*
+*.tmp*
 
 # image folder
-*image*
-*bmp*
+*/images/*
+*.bmp
+*.jpg
 
 # zip files
 *zip
