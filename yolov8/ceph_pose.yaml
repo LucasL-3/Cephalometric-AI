@@ -1,0 +1,21 @@
+# Ultralytics YOLO 🚀, AGPL-3.0 license
+# COCO 2017 dataset https://cocodataset.org by Microsoft
+# Documentation: https://docs.ultralytics.com/datasets/pose/coco/
+# Example usage: yolo train data=coco-pose.yaml
+# parent
+# ├── ultralytics
+# └── datasets
+#     └── coco-pose  ← downloads here (20.1 GB)
+
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+train: /home/ubuntu/yolo-webapp/cephdata/images/train 
+val: /home/ubuntu/yolo-webapp/cephdata/images/val
+test: /home/ubuntu/yolo-webapp/cephdata/images/test
+
+# Keypoints
+kpt_shape: [19, 2] # number of keypoints, number of dims (2 for x,y or 3 for x,y,visible)
+flip_idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+
+# Classes
+names:
+  0: x_ray
