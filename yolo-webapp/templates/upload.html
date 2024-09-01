@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Upload new File</title>
+  <style>
+    #drop-area {
+      border: 2px dashed #ccc;
+      border-radius: 10px;
+      width: 300px;
+      height: 200px;
+      font-family: sans-serif;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    #drop-area.hover {
+      border-color: #333;
+    }
+    #drop-area p {
+      margin: 0;
+      font-size: 16px;
+    }
+    #fileElem {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Upload new File</h1>
+  <div id="drop-area">
+    <form id="file-form" method="post" enctype="multipart/form-data">
+      <p>Drag and drop a file here or click to select</p>
+      <input type="file" id="fileElem" name="file" onchange="handleFiles(this.files)">
+    </form>
+  </div>
+
+  <script>
+    let dropArea = document.getElementById('drop-area');
+
+    dropArea.addEventListener('dragenter', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dropArea.classList.add('hover');
+    });
+
+    dropArea.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dropArea.classList.add('hover');
+    });
+
+    dropArea.addEventListener('dragleave', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dropArea.classList.remove('hover');
+    });
+
+    dropArea.addEventListener('drop', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dropArea.classList.remove('hover');
+      let files = event.dataTransfer.files;
+      handleFiles(files);
+    });
+
+    dropArea.addEventListener('click', () => {
+      document.getElementById('fileElem').click();
+    });
+
+    function handleFiles(files) {
+      if (files.length > 0) {
+        let form = document.getElementById('file-form');
+        form.submit();
+      }
+    }
+  </script>
+</body>
+</html>
