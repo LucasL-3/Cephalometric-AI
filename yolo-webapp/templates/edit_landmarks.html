@@ -5,51 +5,193 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edit Landmarks</title>
     <style>
-        body, html {
+        body {
+            font-family: Arial, sans-serif;
             margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #eee;
+        }
+        h1 { margin-top: 0; }
+        .toolbar {
+            margin-bottom: 16px;
             display: flex;
-            justify-content: center;
+            gap: 12px;
             align-items: center;
-            background-color: #000;
         }
-        img {
+        .toolbar a, .toolbar button {
+            padding: 8px 16px;
+            background: #0066cc;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .toolbar .save { background: #0a7; }
+        .image-wrap {
+            position: relative;
+            display: inline-block;
             max-width: 100%;
-            max-height: 100%;
-            display: block;
         }
+        .image-wrap img {
+            display: block;
+            max-width: 900px;
+            height: auto;
+            vertical-align: top;
+        }
+        #points-layer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            pointer-events: none;
+        }
+        #points-layer .point {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            margin-left: -7px;
+            margin-top: -7px;
+            border-radius: 50%;
+            background: #0af;
+            border: 2px solid #fff;
+            pointer-events: auto;
+            cursor: move;
+            box-sizing: border-box;
+        }
+        #points-layer .point:hover { background: #2bf; }
+        #points-layer .point.dragging { cursor: grabbing; }
+        .no-points {
+            padding: 20px;
+            background: #333;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+        #status { margin-left: 12px; color: #8f8; }
+        #status.err { color: #f88; }
     </style>
 </head>
 <body>
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Landmarks</title>
-    <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: #000;
+    {% set base_name = filename[8:] if filename.startswith('rotated_') else filename %}
+    <h1>Edit Landmarks: {{ filename }}</h1>
+    <div class="toolbar">
+        <a href="{{ url_for('uploaded_file', filename=base_name) }}">← Back to results</a>
+        <button id="btn-save" class="save" {% if not points %}disabled{% endif %}>Save and re-analyze</button>
+        <span id="status"></span>
+    </div>
+    {% if not points %}
+    <div class="no-points">No landmarks to edit. Run detection on this image first (upload and ensure keypoints are detected).</div>
+    {% endif %}
+    <div class="image-wrap">
+        <img id="ceph-image" src="{{ url_for('static', filename='uploads/' + filename) }}" alt="Ceph">
+        <div id="points-layer"></div>
+    </div>
+
+    <script>
+        const filename = {{ filename | tojson }};
+        // points is [[landmark_id, x, y], ...]
+        const points = {{ points | tojson }};
+        // names is ["L1: S", "L2: N", ...] for display reference
+        const names = {{ names | tojson }};
+
+        const img = document.getElementById('ceph-image');
+        const layer = document.getElementById('points-layer');
+        const btnSave = document.getElementById('btn-save');
+        const statusEl = document.getElementById('status');
+
+        let scaleX = 1, scaleY = 1;
+        // Each entry: {id: "L1", x: px, y: px}
+        let currentPoints = points.map(p => ({id: p[0], x: p[1], y: p[2]}));
+        let dragging = null;
+
+        // Build id->display name lookup from the names array
+        const nameMap = {};
+        names.forEach(n => {
+            const parts = n.split(': ');
+            if (parts.length >= 2) nameMap[parts[0]] = n;
+        });
+
+        function placePoints() {
+            layer.innerHTML = '';
+            if (!currentPoints.length) return;
+            const w = img.offsetWidth, h = img.offsetHeight;
+            layer.style.width = w + 'px';
+            layer.style.height = h + 'px';
+            currentPoints.forEach((p, i) => {
+                const el = document.createElement('div');
+                el.className = 'point';
+                el.dataset.i = i;
+                el.title = nameMap[p.id] || p.id;
+                el.style.left = (p.x * scaleX) + 'px';
+                el.style.top = (p.y * scaleY) + 'px';
+                layer.appendChild(el);
+            });
         }
-        img {
-            max-width: 100%;
-            max-height: 100%;
-            display: block;
+
+        function onImageLoad() {
+            const nw = img.naturalWidth, nh = img.naturalHeight;
+            const w = img.offsetWidth, h = img.offsetHeight;
+            scaleX = w / nw;
+            scaleY = h / nh;
+            placePoints();
         }
-    </style>
-</head>
-<body>
-    <img src="{{ url_for('static', filename='uploads/' + filename) }}" alt="Edit Landmarks">
+
+        img.addEventListener('load', onImageLoad);
+        if (img.complete) onImageLoad();
+
+        layer.addEventListener('mousedown', (e) => {
+            const pt = e.target.closest('.point');
+            if (!pt) return;
+            e.preventDefault();
+            const i = parseInt(pt.dataset.i, 10);
+            dragging = { i, startX: e.clientX, startY: e.clientY, startLeft: parseFloat(pt.style.left), startTop: parseFloat(pt.style.top) };
+            pt.classList.add('dragging');
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!dragging) return;
+            const pt = layer.querySelector('.point[data-i="' + dragging.i + '"]');
+            if (!pt) return;
+            const dx = e.clientX - dragging.startX, dy = e.clientY - dragging.startY;
+            const newLeft = dragging.startLeft + dx, newTop = dragging.startTop + dy;
+            pt.style.left = newLeft + 'px';
+            pt.style.top = newTop + 'px';
+            currentPoints[dragging.i].x = newLeft / scaleX;
+            currentPoints[dragging.i].y = newTop / scaleY;
+        });
+        document.addEventListener('mouseup', () => {
+            if (dragging) {
+                layer.querySelector('.point.dragging')?.classList.remove('dragging');
+                dragging = null;
+            }
+        });
+
+        btnSave.addEventListener('click', async () => {
+            if (!currentPoints.length) return;
+            statusEl.textContent = 'Saving…';
+            statusEl.classList.remove('err');
+            try {
+                const saveUrl = {{ url_for('save_landmarks', filename=filename) | tojson }};
+                // Send [landmark_id, x, y] per point
+                const payload = currentPoints.map(p => [p.id, p.x, p.y]);
+                const res = await fetch(saveUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ points: payload })
+                });
+                const data = await res.json();
+                if (data.ok && data.redirect) {
+                    window.location.href = data.redirect;
+                    return;
+                }
+                statusEl.textContent = data.error || 'Save failed';
+                statusEl.classList.add('err');
+            } catch (e) {
+                statusEl.textContent = e.message || 'Request failed';
+                statusEl.classList.add('err');
+            }
+        });
+    </script>
 </body>
 </html>

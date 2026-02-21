@@ -69,6 +69,12 @@
 </head>
 <body>
     <h1>Uploaded Files: {{ filename }}</h1>
+    {% if skeletal_class %}
+    <p><strong>Skeletal class:</strong> {{ skeletal_class }}</p>
+    {% endif %}
+    {% if error %}
+    <p style="color: #c00;">{{ error }}</p>
+    {% endif %}
     <div class="image-container">
         <img src="{{ url_for('static', filename='uploads/' + filename) }}" alt="Original {{ filename }}">
         <img src="{{ url_for('static', filename='uploads/rotated_' + filename) }}" alt="Rotated {{ filename }}">
@@ -76,11 +82,10 @@
     <table class="types-table" id="data-table">
         <thead>
             <tr>
-                <th>Type</th>
-                <th>Class</th>
-                <th>Min Value</th>
+                <th>Measurement</th>
+                <th>Min</th>
                 <th>Value</th>
-                <th>Max Value</th>
+                <th>Max</th>
             </tr>
         </thead>
         <tbody>
@@ -88,9 +93,8 @@
             <tr>
                 <td>{{ row[0] }}</td>
                 <td>{{ row[1] }}</td>
-                <td>{{ row[2]|round(2) }}</td>
-                <td>{{ row[3]|round(2) }}</td>
-                <td>{{ row[4]|round(2) }}</td>
+                <td>{{ row[2] }}</td>
+                <td>{{ row[3] }}</td>
             </tr>
             {% endfor %}
         </tbody>

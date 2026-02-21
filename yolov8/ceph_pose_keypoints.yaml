@@ -1,0 +1,28 @@
+# Keypoint index (0–18) -> name. Order must match your dataset (L1–L19).
+# L1–L19: Sella, Nasion, Orbitale, Porion, Subspinale, Supramentale, Pogonion, Menton, Gnathion, Gonion,
+#         Incision inferius, Incision superius, Upper lip, Lower lip, Subnasale, Soft tissue pogonion,
+#         Posterior nasal spine, Anterior nasal spine, Articulare.
+# Analysis mapping: S=0, N=1, OP_ant/OP_post=2,3 (placeholders), A=4, B=5, Me=7, Go=9, L1_tip=10, U1_tip=11,
+#                    U1_apex=12, LowerLip=13, Columella=14, SoftPog=15. L1_apex set to 10 in code (no separate point).
+keypoint_offset: 0
+
+keypoints:
+  0: S
+  1: N
+  2: OP_ant
+  3: OP_post
+  4: A
+  5: B
+  6: Pogonion
+  7: Me
+  8: Gnathion
+  9: Go
+  10: L1_tip
+  11: U1_tip
+  12: U1_apex
+  13: LowerLip
+  14: Columella
+  15: SoftPog
+  16: PNS
+  17: ANS
+  18: Articulare
