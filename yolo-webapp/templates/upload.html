@@ -2,75 +2,216 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Upload new File</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cephra — Upload</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    #drop-area {
-      border: 2px dashed #ccc;
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #f0f6fc;
+      color: #1e293b;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #ffffff;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header .logo {
+      width: 36px; height: 36px;
+      background: #1a73e8;
       border-radius: 10px;
-      width: 300px;
-      height: 200px;
-      font-family: sans-serif;
-      margin: 50px auto;
-      padding: 20px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 700; font-size: 18px;
     }
-    #drop-area.hover {
-      border-color: #333;
+
+    header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1e293b;
     }
+
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .upload-card {
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 6px 24px rgba(0,0,0,0.06);
+      padding: 48px 40px;
+      text-align: center;
+      max-width: 480px;
+      width: 100%;
+    }
+
+    .upload-card h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .upload-card .subtitle {
+      color: #64748b;
+      font-size: 14px;
+      margin-bottom: 32px;
+    }
+
+    #drop-area {
+      border: 2px dashed #c5d5e4;
+      border-radius: 12px;
+      padding: 48px 24px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: #f8fbff;
+    }
+
+    #drop-area:hover, #drop-area.hover {
+      border-color: #1a73e8;
+      background: #e6f3fd;
+    }
+
+    .drop-icon {
+      width: 56px; height: 56px;
+      margin: 0 auto 16px;
+      background: #e6f3fd;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .drop-icon svg {
+      width: 28px; height: 28px;
+      color: #1a73e8;
+    }
+
     #drop-area p {
-      margin: 0;
-      font-size: 16px;
+      font-size: 15px;
+      color: #475569;
+      line-height: 1.5;
     }
-    #fileElem {
+
+    #drop-area p strong {
+      color: #1a73e8;
+    }
+
+    #drop-area .hint {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-top: 8px;
+    }
+
+    #fileElem { display: none; }
+
+    .loading-overlay {
       display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .loading-overlay.active { display: flex; }
+
+    .spinner {
+      width: 48px; height: 48px;
+      border: 4px solid #e2e8f0;
+      border-top-color: #1a73e8;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-overlay p {
+      font-size: 15px;
+      color: #475569;
+      font-weight: 500;
+    }
+
+    footer {
+      text-align: center;
+      padding: 16px;
+      font-size: 13px;
+      color: #94a3b8;
     }
   </style>
 </head>
 <body>
-  <h1>Upload new File</h1>
-  <div id="drop-area">
-    <form id="file-form" method="post" enctype="multipart/form-data">
-      <p>Drag and drop a file here or click to select</p>
-      <input type="file" id="fileElem" name="file" onchange="handleFiles(this.files)">
-    </form>
+  <header>
+    <div class="logo">C</div>
+    <h1>Cephra</h1>
+  </header>
+
+  <main>
+    <div class="upload-card">
+      <h2>Upload Cephalogram</h2>
+      <p class="subtitle">Upload a lateral cephalometric X-ray for AI-powered analysis</p>
+      <div id="drop-area">
+        <form id="file-form" action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
+          <div class="drop-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/>
+            </svg>
+          </div>
+          <p><strong>Click to upload</strong> or drag and drop</p>
+          <p class="hint">PNG, JPG, BMP — up to 20 MB</p>
+          <input type="file" id="fileElem" name="file" accept="image/*" onchange="handleFiles(this.files)">
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <div class="loading-overlay" id="loading">
+    <div class="spinner"></div>
+    <p>Analyzing cephalogram…</p>
   </div>
 
+  <footer>Cephra — AI-Powered Cephalometric Analysis</footer>
+
   <script>
-    let dropArea = document.getElementById('drop-area');
+    const dropArea = document.getElementById('drop-area');
+    const loadingOverlay = document.getElementById('loading');
 
-    dropArea.addEventListener('dragenter', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      dropArea.classList.add('hover');
+    ['dragenter', 'dragover'].forEach(evt => {
+      dropArea.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); dropArea.classList.add('hover'); });
+    });
+    ['dragleave', 'drop'].forEach(evt => {
+      dropArea.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); dropArea.classList.remove('hover'); });
     });
 
-    dropArea.addEventListener('dragover', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      dropArea.classList.add('hover');
+    dropArea.addEventListener('drop', e => {
+      const dt = e.dataTransfer;
+      document.getElementById('fileElem').files = dt.files;
+      handleFiles(dt.files);
     });
 
-    dropArea.addEventListener('dragleave', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      dropArea.classList.remove('hover');
-    });
-
-    dropArea.addEventListener('drop', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      dropArea.classList.remove('hover');
-      let files = event.dataTransfer.files;
-      handleFiles(files);
-    });
-
-    dropArea.addEventListener('click', () => {
-      document.getElementById('fileElem').click();
-    });
+    dropArea.addEventListener('click', () => document.getElementById('fileElem').click());
 
     function handleFiles(files) {
       if (files.length > 0) {
-        let form = document.getElementById('file-form');
-        form.submit();
+        loadingOverlay.classList.add('active');
+        document.getElementById('file-form').submit();
       }
     }
   </script>

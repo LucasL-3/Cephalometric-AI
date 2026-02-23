@@ -3,115 +3,244 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Landmarks</title>
+    <title>Cephra — Edit Landmarks</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: #1a1a1a;
-            color: #eee;
-        }
-        h1 { margin-top: 0; }
-        .toolbar {
-            margin-bottom: 16px;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: #1a2332;
+            color: #e2e8f0;
+            min-height: 100vh;
             display: flex;
-            gap: 12px;
-            align-items: center;
+            flex-direction: column;
         }
-        .toolbar a, .toolbar button {
-            padding: 8px 16px;
-            background: #0066cc;
-            color: #fff;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            text-decoration: none;
-            font-size: 14px;
+
+        header {
+            background: #0f1923;
+            border-bottom: 1px solid #2d3b4e;
+            padding: 12px 24px;
+            display: flex; align-items: center; gap: 12px;
         }
-        .toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .toolbar .save { background: #0a7; }
+        header .logo {
+            width: 32px; height: 32px; background: #1a73e8; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-weight: 700; font-size: 16px;
+        }
+        header h1 { font-size: 16px; font-weight: 600; color: #e2e8f0; }
+        header .file-label { font-size: 13px; color: #64748b; margin-left: 4px; }
+
+        .toolbar {
+            background: #0f1923; border-bottom: 1px solid #2d3b4e;
+            padding: 10px 24px; display: flex; align-items: center; gap: 10px;
+        }
+        .tb-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 7px 14px; font-size: 13px; font-weight: 500;
+            border-radius: 7px; text-decoration: none;
+            border: none; cursor: pointer; transition: all 0.15s ease; font-family: inherit;
+        }
+        .tb-btn svg { width: 15px; height: 15px; }
+        .tb-btn-ghost { background: transparent; color: #94a3b8; border: 1px solid #2d3b4e; }
+        .tb-btn-ghost:hover { background: #2d3b4e; color: #e2e8f0; }
+        .tb-btn-save { background: #16a34a; color: #fff; }
+        .tb-btn-save:hover { background: #15803d; }
+        .tb-btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
+        .tb-btn-toggle { background: transparent; color: #94a3b8; border: 1px solid #2d3b4e; }
+        .tb-btn-toggle:hover { background: #2d3b4e; color: #e2e8f0; }
+        .tb-btn-toggle.active { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+
+        #status { margin-left: 8px; font-size: 13px; font-weight: 500; }
+        #status.ok  { color: #4ade80; }
+        #status.err { color: #f87171; }
+
+        .no-points-msg {
+            margin: 40px auto; max-width: 500px; padding: 24px;
+            background: #253244; border: 1px solid #2d3b4e; border-radius: 12px;
+            text-align: center; color: #94a3b8; font-size: 14px;
+        }
+
+        main {
+            flex: 1; display: flex; align-items: flex-start; justify-content: center;
+            padding: 24px; overflow: auto;
+        }
+
         .image-wrap {
-            position: relative;
-            display: inline-block;
-            max-width: 100%;
+            position: relative; display: inline-block;
+            border-radius: 8px; overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.4);
         }
         .image-wrap img {
             display: block;
-            max-width: 900px;
+            max-width: calc(100vw - 48px);
+            max-height: calc(100vh - 120px);
             height: auto;
             vertical-align: top;
         }
-        #points-layer {
-            position: absolute;
-            left: 0;
-            top: 0;
+        body.expanded .image-wrap img {
+            width: auto;
+            height: calc(100vh - 100px);
+            max-width: calc(100vw - 32px);
+            max-height: calc(100vh - 100px);
+        }
+        body.expanded main {
+            padding: 8px;
+        }
+
+        #ref-canvas {
+            position: absolute; left: 0; top: 0;
+            width: 100%; height: 100%;
             pointer-events: none;
         }
+
+        #points-layer {
+            position: absolute; left: 0; top: 0;
+            pointer-events: none;
+        }
+
         #points-layer .point {
             position: absolute;
-            width: 14px;
-            height: 14px;
-            margin-left: -7px;
-            margin-top: -7px;
+            width: 14px; height: 14px;
+            margin-left: -7px; margin-top: -7px;
             border-radius: 50%;
-            background: #0af;
-            border: 2px solid #fff;
+            background: #38bdf8;
+            border: 2px solid #ffffff;
             pointer-events: auto;
             cursor: move;
             box-sizing: border-box;
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+            box-shadow: 0 0 0 2px rgba(56,189,248,0.3);
         }
-        #points-layer .point:hover { background: #2bf; }
-        #points-layer .point.dragging { cursor: grabbing; }
-        .no-points {
-            padding: 20px;
-            background: #333;
-            border-radius: 8px;
-            margin-bottom: 16px;
+        #points-layer .point:hover {
+            transform: scale(1.3); background: #7dd3fc;
+            box-shadow: 0 0 0 4px rgba(56,189,248,0.4);
         }
-        #status { margin-left: 12px; color: #8f8; }
-        #status.err { color: #f88; }
+        #points-layer .point.dragging {
+            cursor: grabbing; transform: scale(1.4);
+            background: #facc15; border-color: #fef08a;
+            box-shadow: 0 0 0 4px rgba(250,204,21,0.4);
+        }
+        #points-layer .point.extra {
+            background: #64748b; border-color: #94a3b8;
+            box-shadow: 0 0 0 1px rgba(100,116,139,0.3);
+        }
+        #points-layer .point.extra:hover {
+            background: #94a3b8;
+            box-shadow: 0 0 0 3px rgba(100,116,139,0.4);
+        }
+        #points-layer .point.hidden-extra { display: none; }
+        #points-layer .point-label {
+            position: absolute;
+            font-size: 10px; font-weight: 600; color: #fff;
+            text-shadow: -1px -1px 2px #0f172a, 1px -1px 2px #0f172a,
+                         -1px 1px 2px #0f172a, 1px 1px 2px #0f172a;
+            pointer-events: none; white-space: nowrap;
+        }
+        #points-layer .point-label.hidden-extra { display: none; }
+
+        
     </style>
 </head>
 <body>
     {% set base_name = filename[8:] if filename.startswith('rotated_') else filename %}
-    <h1>Edit Landmarks: {{ filename }}</h1>
+
+    <header>
+        <div class="logo">C</div>
+        <h1>Edit Landmarks</h1>
+        <span class="file-label">— {{ filename }}</span>
+    </header>
+
     <div class="toolbar">
-        <a href="{{ url_for('uploaded_file', filename=base_name) }}">← Back to results</a>
-        <button id="btn-save" class="save" {% if not points %}disabled{% endif %}>Save and re-analyze</button>
+        <a class="tb-btn tb-btn-ghost" href="{{ url_for('uploaded_file', filename=base_name) }}">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"/></svg>
+            Back to Results
+        </a>
+        <button id="btn-show-all" class="tb-btn tb-btn-toggle" onclick="toggleShowAll()">Show All</button>
+        <button id="btn-expand" class="tb-btn tb-btn-toggle" onclick="toggleExpand()">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"/></svg>
+            <span id="expand-label">Expand</span>
+        </button>
+        <button id="btn-save" class="tb-btn tb-btn-save" {% if not points %}disabled{% endif %}>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+            Save &amp; Re-analyze
+        </button>
         <span id="status"></span>
     </div>
+
     {% if not points %}
-    <div class="no-points">No landmarks to edit. Run detection on this image first (upload and ensure keypoints are detected).</div>
+    <div class="no-points-msg">No landmarks to edit. Upload and analyze an image first to detect keypoints.</div>
     {% endif %}
-    <div class="image-wrap">
-        <img id="ceph-image" src="{{ url_for('static', filename='uploads/' + filename) }}" alt="Ceph">
-        <div id="points-layer"></div>
-    </div>
+
+    <main>
+        <div class="image-wrap">
+            <img id="ceph-image" src="{{ url_for('static', filename='uploads/' + base_name) }}" alt="Ceph">
+            <canvas id="ref-canvas"></canvas>
+            <div id="points-layer"></div>
+        </div>
+    </main>
 
     <script>
         const filename = {{ filename | tojson }};
-        // points is [[landmark_id, x, y], ...]
         const points = {{ points | tojson }};
-        // names is ["L1: S", "L2: N", ...] for display reference
         const names = {{ names | tojson }};
+        const usedIds = new Set({{ used_ids | tojson }});
+        const lmColors = {{ landmark_colors | tojson }};
 
         const img = document.getElementById('ceph-image');
         const layer = document.getElementById('points-layer');
+        const refCanvas = document.getElementById('ref-canvas');
         const btnSave = document.getElementById('btn-save');
         const statusEl = document.getElementById('status');
 
         let scaleX = 1, scaleY = 1;
-        // Each entry: {id: "L1", x: px, y: px}
         let currentPoints = points.map(p => ({id: p[0], x: p[1], y: p[2]}));
         let dragging = null;
+        let showAll = false;
 
-        // Build id->display name lookup from the names array
         const nameMap = {};
         names.forEach(n => {
             const parts = n.split(': ');
             if (parts.length >= 2) nameMap[parts[0]] = n;
         });
+
+        function drawRefDots() {
+            const dpr = window.devicePixelRatio || 1;
+            const w = img.offsetWidth, h = img.offsetHeight;
+            refCanvas.width = w * dpr;
+            refCanvas.height = h * dpr;
+            const ctx = refCanvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, w, h);
+
+            currentPoints.forEach(p => {
+                const isUsed = usedIds.has(p.id);
+                if (!isUsed && !showAll) return;
+                const color = lmColors[p.id] || '#ffffff';
+                const x = p.x * scaleX, y = p.y * scaleY;
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.globalAlpha = 0.7;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            });
+        }
+
+        function toggleShowAll() {
+            showAll = !showAll;
+            const btn = document.getElementById('btn-show-all');
+            btn.classList.toggle('active', showAll);
+            btn.textContent = showAll ? 'Hide Extra' : 'Show All';
+            layer.querySelectorAll('.extra').forEach(el => {
+                el.classList.toggle('hidden-extra', !showAll);
+            });
+            drawRefDots();
+        }
 
         function placePoints() {
             layer.innerHTML = '';
@@ -120,13 +249,25 @@
             layer.style.width = w + 'px';
             layer.style.height = h + 'px';
             currentPoints.forEach((p, i) => {
+                const isUsed = usedIds.has(p.id);
+                const hidden = !isUsed && !showAll;
+                const displayName = nameMap[p.id] || p.id;
+
                 const el = document.createElement('div');
-                el.className = 'point';
+                el.className = 'point' + (isUsed ? '' : ' extra') + (hidden ? ' hidden-extra' : '');
                 el.dataset.i = i;
-                el.title = nameMap[p.id] || p.id;
+                el.title = displayName;
                 el.style.left = (p.x * scaleX) + 'px';
                 el.style.top = (p.y * scaleY) + 'px';
                 layer.appendChild(el);
+
+                const lbl = document.createElement('span');
+                lbl.className = 'point-label' + (isUsed ? '' : ' extra') + (hidden ? ' hidden-extra' : '');
+                lbl.dataset.li = i;
+                lbl.textContent = displayName.split(': ').pop();
+                lbl.style.left = (p.x * scaleX + 9) + 'px';
+                lbl.style.top = (p.y * scaleY - 5) + 'px';
+                layer.appendChild(lbl);
             });
         }
 
@@ -136,10 +277,12 @@
             scaleX = w / nw;
             scaleY = h / nh;
             placePoints();
+            drawRefDots();
         }
 
         img.addEventListener('load', onImageLoad);
         if (img.complete) onImageLoad();
+        new ResizeObserver(() => { onImageLoad(); }).observe(img);
 
         layer.addEventListener('mousedown', (e) => {
             const pt = e.target.closest('.point');
@@ -159,6 +302,11 @@
             pt.style.top = newTop + 'px';
             currentPoints[dragging.i].x = newLeft / scaleX;
             currentPoints[dragging.i].y = newTop / scaleY;
+            const lbl = layer.querySelector('.point-label[data-li="' + dragging.i + '"]');
+            if (lbl) {
+                lbl.style.left = (newLeft + 9) + 'px';
+                lbl.style.top = (newTop - 5) + 'px';
+            }
         });
         document.addEventListener('mouseup', () => {
             if (dragging) {
@@ -167,13 +315,24 @@
             }
         });
 
+        let expanded = false;
+        function toggleExpand() {
+            expanded = !expanded;
+            document.body.classList.toggle('expanded', expanded);
+            const btn = document.getElementById('btn-expand');
+            btn.classList.toggle('active', expanded);
+            document.getElementById('expand-label').textContent = expanded ? 'Collapse' : 'Expand';
+        }
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && expanded) toggleExpand();
+        });
+
         btnSave.addEventListener('click', async () => {
             if (!currentPoints.length) return;
             statusEl.textContent = 'Saving…';
-            statusEl.classList.remove('err');
+            statusEl.className = 'ok';
             try {
                 const saveUrl = {{ url_for('save_landmarks', filename=filename) | tojson }};
-                // Send [landmark_id, x, y] per point
                 const payload = currentPoints.map(p => [p.id, p.x, p.y]);
                 const res = await fetch(saveUrl, {
                     method: 'POST',
@@ -186,10 +345,10 @@
                     return;
                 }
                 statusEl.textContent = data.error || 'Save failed';
-                statusEl.classList.add('err');
+                statusEl.className = 'err';
             } catch (e) {
                 statusEl.textContent = e.message || 'Request failed';
-                statusEl.classList.add('err');
+                statusEl.className = 'err';
             }
         });
     </script>

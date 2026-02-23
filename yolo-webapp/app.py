@@ -4,10 +4,16 @@ import os
 from image_processor import (
     yolo_inference,
     get_placeholder_measurements,
+    interpret_measurements,
     analysis_from_landmarks,
     read_points_xy,
     read_points_file,
     get_keypoint_names,
+    create_result_image,
+    coords_for_frontend,
+    extra_coords_for_frontend,
+    get_used_landmark_ids,
+    get_landmark_colors,
 )
 
 app = Flask(__name__)
@@ -78,7 +84,20 @@ def uploaded_file(filename):
     error = stored.get('error', '')
     quality = stored.get('quality')
     keypoint_confidence = stored.get('keypoint_confidence')
-    return render_template('uploaded.html', filename=filename, data=data, skeletal_class=skeletal_class, error=error, quality=quality, keypoint_confidence=keypoint_confidence)
+    clinical_interp, layman_interp = interpret_measurements(data)
+    points_path = _points_path_for_result_image(f"rotated_{filename}")
+    landmark_coords = {}
+    extra_landmarks = {}
+    if os.path.isfile(points_path):
+        raw_coords = read_points_file(points_path)
+        landmark_coords = coords_for_frontend(raw_coords)
+        extra_landmarks = extra_coords_for_frontend(raw_coords)
+    return render_template('uploaded.html', filename=filename, data=data,
+                           skeletal_class=skeletal_class, error=error,
+                           quality=quality, keypoint_confidence=keypoint_confidence,
+                           clinical_interp=clinical_interp, layman_interp=layman_interp,
+                           landmark_coords=landmark_coords,
+                           extra_landmarks=extra_landmarks)
 
 def _points_path_for_result_image(filename):
     """Path to the points file for a result image e.g. rotated_test.png -> .../rotated_test_points.txt."""
@@ -99,11 +118,15 @@ def edit_landmarks(filename):
     points_path = _points_path_for_result_image(filename)
     points = read_points_xy(points_path)
     names = get_keypoint_names()
+    used_ids = sorted(get_used_landmark_ids())
+    landmark_colors = get_landmark_colors()
     return render_template(
         "edit_landmarks.html",
         filename=filename,
         points=points,
         names=names,
+        used_ids=used_ids,
+        landmark_colors=landmark_colors,
     )
 
 
@@ -129,6 +152,10 @@ def save_landmarks(filename):
             "quality": None,
             "keypoint_confidence": None,
         }
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+        original_image = os.path.join(app_dir, app.config["UPLOAD_FOLDER"], base)
+        result_image = os.path.join(app_dir, app.config["UPLOAD_FOLDER"], f"rotated_{base}")
+        create_result_image(original_image, coords, result_image)
     except Exception as e:
         app.logger.exception("Re-analysis failed")
         return jsonify({"ok": False, "error": str(e)}), 500
