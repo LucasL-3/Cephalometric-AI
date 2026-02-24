@@ -297,6 +297,36 @@
             </div>
         </div>
 
+        {% if ai_summary_clinical %}
+        <div class="card">
+            <div class="card-header">
+                <div class="icon" style="background:#ede9fe;color:#7c3aed;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
+                </div>
+                <h3>AI Clinical Summary</h3>
+                <span style="margin-left:auto;font-size:11px;color:#94a3b8;background:#f1f5f9;padding:3px 10px;border-radius:12px;">Powered by Llama 3.3</span>
+            </div>
+            <div class="card-body" style="padding:16px 20px;">
+                <p style="font-size:14px;line-height:1.7;color:#334155;">{{ ai_summary_clinical }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if ai_summary_patient %}
+        <div class="card">
+            <div class="card-header">
+                <div class="icon" style="background:#fff8e6;color:#d97706;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/></svg>
+                </div>
+                <h3>Patient-Friendly Summary</h3>
+                <span style="margin-left:auto;font-size:11px;color:#94a3b8;background:#f1f5f9;padding:3px 10px;border-radius:12px;">Powered by Llama 3.3</span>
+            </div>
+            <div class="card-body" style="padding:16px 20px;">
+                <p style="font-size:14px;line-height:1.7;color:#334155;">{{ ai_summary_patient }}</p>
+            </div>
+        </div>
+        {% endif %}
+
         {% if clinical_interp %}
         <div class="card">
             <div class="card-header">
@@ -386,50 +416,52 @@
     // Data
     // =====================================================================
     const LM = {{ landmark_coords | tojson }};
-    if (!LM.Columella && LM.Sn) LM.Columella = LM.Sn;
+    if (!LM.Cm && LM.Sn) LM.Cm = LM.Sn;
     const EXTRAS = {{ extra_landmarks | tojson }};
     let showAll = false;
 
     const pdfData = {{ data | tojson }};
     const pdfClinical = {{ clinical_interp | tojson if clinical_interp else '[]' }};
     const pdfLayman = {{ layman_interp | tojson if layman_interp else '[]' }};
+    const aiSummaryClinical = {{ (ai_summary_clinical or '') | tojson }};
+    const aiSummaryPatient = {{ (ai_summary_patient or '') | tojson }};
 
     function allPts() {
         const p = {...LM};
-        if (p.U1_tip && p.L1_tip)
-            p._op_ant = { x:(p.U1_tip.x+p.L1_tip.x)/2, y:(p.U1_tip.y+p.L1_tip.y)/2 };
+        if (p.UIe && p.LIe)
+            p._op_ant = { x:(p.UIe.x+p.LIe.x)/2, y:(p.UIe.y+p.LIe.y)/2 };
         if (!p._molar) p._molar = p.msc || p.MB1 || null;
         return p;
     }
 
+    // Labels match Edit Landmarks page names (from group_info JSON)
     const LABELS = {
         S:'S', N:'N', A:'A', B:'B', Go:'Go', Me:'Me', Or:'Or', Po:'Po',
-        U1_tip:'U1', U1_apex:'U1a', L1_tip:'L1', L1_apex:'L1a',
-        msc:'Mo', MB1:'Mo', Sn:'Sn', Columella:'Cm',
-        UpperLip:'UL', LowerLip:'LL', SoftPog:"Pog'",
-        Pogonion:'Pog', Gnathion:'Gn', Ar:'Ar', PNS:'PNS', ANS:'ANS',
-        U1_root:'U1r', L1_root:'L1r', _op_ant:'OP', _molar:'Mo',
+        Pog:'Pog', Gn:'Gn', Ar:'Ar', PNS:'PNS', ANS:'ANS',
+        UIe:'UIe', LIe:'LIe', isa:'isa', iia:'iia', U1:'U1', L1:'L1',
+        msc:'msc', MB1:'MB1', Sn:'Sn', Cm:'Cm', UL:'UL', LL:'LL', "Pog'":"Pog'",
+        _op_ant:'OP', _molar:'Mo',
     };
 
     const MEAS = {
         'SNA':           { pts:['S','N','A'],                             lines:[['N','S'],['N','A']] },
         'SNB':           { pts:['S','N','B'],                             lines:[['N','S'],['N','B']] },
-        'ANB':           { pts:['A','N','B','S'],                         lines:[['N','A'],['N','B']] },
+        'ANB':           { pts:['A','N','B'],                            lines:[['N','A'],['N','B']] },
         'Wits(mm)':      { pts:['A','B','_op_ant','_molar'],              lines:[['_molar','_op_ant'],['A','B']] },
         'SN-MP':         { pts:['S','N','Go','Me'],                       lines:[['S','N'],['Go','Me']] },
         'FMA':           { pts:['Or','Po','Go','Me'],                     lines:[['Po','Or'],['Go','Me']] },
         'OP-SN':         { pts:['S','N','_op_ant','_molar'],              lines:[['S','N'],['_molar','_op_ant']] },
-        'U1-NA(°)':      { pts:['N','A','U1_tip','U1_apex'],              lines:[['N','A'],['U1_apex','U1_tip']] },
-        'U1-NA(mm)':     { pts:['N','A','U1_tip'],                        lines:[['N','A']] },
-        'L1-NB(°)':      { pts:['N','B','L1_tip','L1_apex'],              lines:[['N','B'],['L1_apex','L1_tip']] },
-        'L1-NB(mm)':     { pts:['N','B','L1_tip'],                        lines:[['N','B']] },
-        'IMPA':          { pts:['Go','Me','L1_tip','L1_apex'],            lines:[['Go','Me'],['L1_apex','L1_tip']] },
-        'Interincisal':  { pts:['U1_tip','U1_apex','L1_tip','L1_apex'],   lines:[['U1_apex','U1_tip'],['L1_apex','L1_tip']] },
-        'Overjet(mm)':   { pts:['U1_tip','L1_tip'],                       lines:[['U1_tip','L1_tip']] },
-        'Overbite(mm)':  { pts:['U1_tip','L1_tip'],                       lines:[['U1_tip','L1_tip']] },
-        'Nasolabial(°)': { pts:['Sn','Columella','UpperLip'],             lines:[['Sn','Columella'],['Sn','UpperLip']] },
-        'UL-SLine(mm)':  { pts:['SoftPog','Columella','UpperLip'],        lines:[['SoftPog','Columella']] },
-        'LL-SLine(mm)':  { pts:['SoftPog','Columella','LowerLip'],        lines:[['SoftPog','Columella']] },
+        'U1-NA(°)':      { pts:['N','A','UIe','isa'],                     lines:[['N','A'],['isa','UIe']] },
+        'U1-NA(mm)':     { pts:['N','A','UIe'],                          lines:[['N','A']] },
+        'L1-NB(°)':      { pts:['N','B','LIe','iia'],                   lines:[['N','B'],['iia','LIe']] },
+        'L1-NB(mm)':     { pts:['N','B','LIe'],                          lines:[['N','B']] },
+        'IMPA':          { pts:['Go','Me','LIe','iia'],                 lines:[['Go','Me'],['iia','LIe']] },
+        'Interincisal':  { pts:['UIe','isa','LIe','iia'],                lines:[['isa','UIe'],['iia','LIe']] },
+        'Overjet(mm)':   { pts:['UIe','LIe'],                            lines:[['UIe','LIe']] },
+        'Overbite(mm)':  { pts:['UIe','LIe'],                            lines:[['UIe','LIe']] },
+        'Nasolabial(°)': { pts:['Sn','Cm','UL'],                          lines:[['Sn','Cm'],['Sn','UL']] },
+        'UL-SLine(mm)':  { pts:["Pog'",'Cm','UL'],                        lines:[["Pog'",'Cm']] },
+        'LL-SLine(mm)':  { pts:["Pog'",'Cm','LL'],                        lines:[["Pog'",'Cm']] },
     };
 
     const COLORS = ['#f59e0b','#ef4444','#8b5cf6','#06b6d4','#10b981','#f97316','#ec4899','#3b82f6','#14b8a6','#a855f7'];
@@ -651,6 +683,24 @@
             alternateRowStyles:{fillColor:[248,251,255]},
             margin:{left:14,right:14},
         });
+        if (aiSummaryClinical || aiSummaryPatient) {
+            let sy = doc.lastAutoTable.finalY + 12;
+            if (aiSummaryClinical) {
+                doc.setFontSize(13); doc.setTextColor(124,58,237);
+                doc.text('AI Clinical Summary', 14, sy);
+                doc.setFontSize(9); doc.setTextColor(51,65,85);
+                const cLines = doc.splitTextToSize(aiSummaryClinical, pw - 28);
+                doc.text(cLines, 14, sy + 8);
+                sy += 8 + cLines.length * 4.5 + 10;
+            }
+            if (aiSummaryPatient) {
+                doc.setFontSize(13); doc.setTextColor(217,119,6);
+                doc.text('Patient-Friendly Summary', 14, sy);
+                doc.setFontSize(9); doc.setTextColor(51,65,85);
+                const pLines = doc.splitTextToSize(aiSummaryPatient, pw - 28);
+                doc.text(pLines, 14, sy + 8);
+            }
+        }
         if (pdfClinical.length > 0) {
             doc.addPage();
             doc.setFontSize(14); doc.setTextColor(22,163,74);

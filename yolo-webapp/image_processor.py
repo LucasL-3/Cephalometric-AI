@@ -2,9 +2,13 @@ import os
 import json
 import math
 import shutil
+import logging
 import cv2
 import numpy as np
+import requests
 from ultralytics import YOLO
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -39,40 +43,16 @@ def _load_all_models():
 
 MODELS = _load_all_models()
 
-# Mapping from new-model landmark IDs to Steiner analysis internal names.
-# The new model uses L1–L68; Steiner analysis needs: S, N, A, B, Go, Me,
-# U1_tip, U1_apex, L1_tip, L1_apex, SoftPog, Columella/Subnasale, LowerLip,
-# Or (for occlusal plane anterior proxy), Po (for occlusal plane posterior proxy).
-LANDMARK_ID_TO_ANALYSIS = {
-    "L1": "S",          # Sella
-    "L2": "N",          # Nasion
-    "L3": "Or",         # Orbitale  (OP_ant proxy)
-    "L4": "Po",         # Porion    (OP_post proxy)
-    "L5": "A",          # A-point / Subspinale
-    "L6": "B",          # B-point / Supramentale
-    "L7": "Pogonion",   # Pogonion (hard tissue)
-    "L8": "Me",         # Menton
-    "L9": "Gnathion",   # Gnathion
-    "L10": "Go",        # Gonion
-    "L11": "L1_tip",    # Lower incisor edge (LIe)
-    "L12": "U1_tip",    # Upper incisor edge (UIe)
-    "L13": "UpperLip",  # Upper Lip
-    "L14": "LowerLip",  # Lower Lip
-    "L15": "Sn",        # Subnasale
-    "L16": "SoftPog",   # Soft tissue pogonion (Pog')
-    "L17": "PNS",       # Posterior nasal spine
-    "L18": "ANS",       # Anterior nasal spine
-    "L19": "Ar",        # Articulare
-    "L24": "Columella",  # Columella
-    "L30": "U1_root",   # Upper incisor root (U1)
-    "L31": "L1_root",   # Lower incisor root (L1)
-    "L32": "U1_apex",   # Upper incisor apex (isa)
-    "L33": "L1_apex",   # Lower incisor apex (iia)
-    "L34": "msc",        # Molar superior cusp (occlusal plane posterior)
-    "L37": "MB1",        # Mesiobuccal cusp (occlusal plane posterior alt)
-}
+# Landmark IDs used in Steiner analysis. Names must match Edit Landmarks page
+# (from group_info/landmarks_info_*.json) so Analysis and Edit show the same labels.
+_ANALYSIS_LANDMARK_IDS = [
+    "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9", "L10",
+    "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18", "L19",
+    "L24", "L30", "L31", "L32", "L33", "L34", "L37",
+]
 
-# Build a master list of all landmark IDs -> display names
+
+# Build a master list of all landmark IDs -> display names (from JSON; used by Edit Landmarks page)
 def _build_all_landmark_names():
     names = {}
     for gid in range(NUM_GROUPS):
@@ -81,6 +61,13 @@ def _build_all_landmark_names():
     return names
 
 ALL_LANDMARK_NAMES = _build_all_landmark_names()
+
+# Analysis uses same names as Edit Landmarks page (UIe, LIe, UL, LL, Sn, Cm, Pog', isa, iia, U1, L1, etc.)
+LANDMARK_ID_TO_ANALYSIS = {
+    lid: ALL_LANDMARK_NAMES[lid]
+    for lid in _ANALYSIS_LANDMARK_IDS
+    if lid in ALL_LANDMARK_NAMES
+}
 
 
 def get_keypoint_names():
@@ -248,28 +235,29 @@ def analysis_from_landmarks(all_coords):
     Or = _lm(all_coords, "Or")
     Po = _lm(all_coords, "Po")
 
-    U1_tip  = _lm(all_coords, "U1_tip")
-    U1_apex = _lm(all_coords, "U1_apex")
-    L1_tip  = _lm(all_coords, "L1_tip")
-    L1_apex = _lm(all_coords, "L1_apex")
+    # Incisor edges (ULE/LLE): use UIe and LIe — same names as Edit Landmarks page
+    UIe = _lm(all_coords, "UIe")
+    LIe = _lm(all_coords, "LIe")
+    isa = _lm(all_coords, "isa")
+    iia = _lm(all_coords, "iia")
 
     molar = _lm(all_coords, "msc")
     if molar is None:
         molar = _lm(all_coords, "MB1")
 
-    SoftPog   = _lm(all_coords, "SoftPog")
-    Columella = _lm(all_coords, "Columella")
-    if Columella is None:
-        Columella = _lm(all_coords, "Sn")
-    Sn        = _lm(all_coords, "Sn")
-    UpperLip  = _lm(all_coords, "UpperLip")
-    LowerLip  = _lm(all_coords, "LowerLip")
+    Pog_soft = _lm(all_coords, "Pog'")
+    Cm       = _lm(all_coords, "Cm")
+    if Cm is None:
+        Cm = _lm(all_coords, "Sn")
+    Sn = _lm(all_coords, "Sn")
+    UL = _lm(all_coords, "UL")
+    LL = _lm(all_coords, "LL")
 
-    # Occlusal plane: anterior = midpoint of incisor edges, posterior = molar cusp
+    # Occlusal plane: anterior = midpoint of incisor edges (UIe, LIe), posterior = molar cusp
     op_ant = None
-    if U1_tip and L1_tip:
-        op_ant = Point((U1_tip.x + L1_tip.x) / 2,
-                       (U1_tip.y + L1_tip.y) / 2)
+    if UIe and LIe:
+        op_ant = Point((UIe.x + LIe.x) / 2,
+                       (UIe.y + LIe.y) / 2)
 
     # ======================================================================
     # SKELETAL  (6 measurements)
@@ -345,56 +333,56 @@ def analysis_from_landmarks(all_coords):
     else:
         results.append(["OP-SN", 10, 0, 18])
 
-    # 8. U1-NA angle
-    if N and A and U1_tip and U1_apex:
-        U1_NA_ang = Angle(Vector(N, A), Vector(U1_apex, U1_tip)).theta()
+    # 8. U1-NA angle  (UIe, isa)
+    if N and A and UIe and isa:
+        U1_NA_ang = Angle(Vector(N, A), Vector(isa, UIe)).theta()
         results.append(_interpret_angle("U1-NA(°)", U1_NA_ang, 18, 26))
     else:
         results.append(["U1-NA(°)", 18, 0, 26])
 
     # 9. U1-NA linear
-    if N and A and U1_tip:
-        d_mm = abs(point_to_line_distance_signed(U1_tip.x, U1_tip.y, N, A)) * MM_PER_PIXEL
+    if N and A and UIe:
+        d_mm = abs(point_to_line_distance_signed(UIe.x, UIe.y, N, A)) * MM_PER_PIXEL
         results.append(_interpret_linear_mm("U1-NA(mm)", d_mm, 2, 6))
     else:
         results.append(["U1-NA(mm)", 2, 0, 6])
 
-    # 10. L1-NB angle
-    if N and B and L1_tip and L1_apex:
-        L1_NB_ang = Angle(Vector(B, N), Vector(L1_apex, L1_tip)).theta()
+    # 10. L1-NB angle  (LIe, iia)
+    if N and B and LIe and iia:
+        L1_NB_ang = Angle(Vector(B, N), Vector(iia, LIe)).theta()
         results.append(_interpret_angle("L1-NB(°)", L1_NB_ang, 20, 30))
     else:
         results.append(["L1-NB(°)", 20, 0, 30])
 
     # 11. L1-NB linear
-    if N and B and L1_tip:
-        d_mm = abs(point_to_line_distance_signed(L1_tip.x, L1_tip.y, N, B)) * MM_PER_PIXEL
+    if N and B and LIe:
+        d_mm = abs(point_to_line_distance_signed(LIe.x, LIe.y, N, B)) * MM_PER_PIXEL
         results.append(_interpret_linear_mm("L1-NB(mm)", d_mm, 2, 6))
     else:
         results.append(["L1-NB(mm)", 2, 0, 6])
 
-    # 12. IMPA  (lower incisor to mandibular plane, Tweed, norm 90° ± 5°)
-    if Go and Me and L1_tip and L1_apex:
-        IMPA_val = Angle(Vector(Go, Me), Vector(L1_apex, L1_tip)).theta()
+    # 12. IMPA  (lower incisor to mandibular plane; LIe, iia)
+    if Go and Me and LIe and iia:
+        IMPA_val = Angle(Vector(Go, Me), Vector(iia, LIe)).theta()
         results.append(_interpret_angle("IMPA", IMPA_val, 85, 95))
     else:
         results.append(["IMPA", 85, 0, 95])
 
-    # 13. Interincisal angle
-    if U1_tip and U1_apex and L1_tip and L1_apex:
-        inter_ang = Angle(Vector(U1_apex, U1_tip), Vector(L1_apex, L1_tip)).theta()
+    # 13. Interincisal angle  (UIe, LIe, isa, iia)
+    if UIe and isa and LIe and iia:
+        inter_ang = Angle(Vector(isa, UIe), Vector(iia, LIe)).theta()
         results.append(_interpret_angle("Interincisal", inter_ang, 120, 140))
     else:
         results.append(["Interincisal", 120, 0, 140])
 
-    # 14. Overjet  (horizontal incisor overlap, norm 2-4 mm)
-    if U1_tip and L1_tip and S and N:
+    # 14. Overjet  (horizontal overlap at incisor edges; ULE/LLE = UIe, LIe)
+    if UIe and LIe and S and N:
         ant_dx = N.x - S.x
         ant_dy = N.y - S.y
         ant_len = math.hypot(ant_dx, ant_dy)
         if ant_len > 1e-9:
-            diff_x = U1_tip.x - L1_tip.x
-            diff_y = U1_tip.y - L1_tip.y
+            diff_x = UIe.x - LIe.x
+            diff_y = UIe.y - LIe.y
             overjet_px = (diff_x * ant_dx + diff_y * ant_dy) / ant_len
             results.append(_interpret_linear_mm("Overjet(mm)", overjet_px * MM_PER_PIXEL, 1, 4))
         else:
@@ -402,8 +390,8 @@ def analysis_from_landmarks(all_coords):
     else:
         results.append(["Overjet(mm)", 1, 0, 4])
 
-    # 15. Overbite  (vertical incisor overlap, norm 1-4 mm)
-    if U1_tip and L1_tip and S and N:
+    # 15. Overbite  (vertical overlap at incisor edges; ULE/LLE = UIe, LIe)
+    if UIe and LIe and S and N:
         ant_dx = N.x - S.x
         ant_dy = N.y - S.y
         ant_len = math.hypot(ant_dx, ant_dy)
@@ -412,8 +400,8 @@ def analysis_from_landmarks(all_coords):
             perp_dy = ant_dx
             if perp_dy < 0:
                 perp_dx, perp_dy = -perp_dx, -perp_dy
-            diff_x = U1_tip.x - L1_tip.x
-            diff_y = U1_tip.y - L1_tip.y
+            diff_x = UIe.x - LIe.x
+            diff_y = UIe.y - LIe.y
             overbite_px = (diff_x * perp_dx + diff_y * perp_dy) / ant_len
             results.append(_interpret_linear_mm("Overbite(mm)", overbite_px * MM_PER_PIXEL, 1, 4))
         else:
@@ -425,23 +413,23 @@ def analysis_from_landmarks(all_coords):
     # SOFT TISSUE  (3 measurements)
     # ======================================================================
 
-    # 16. Nasolabial angle  (Columella-Sn-UpperLip, norm 90-110°)
-    if Sn and Columella and UpperLip:
-        nasol = Angle(Vector(Sn, Columella), Vector(Sn, UpperLip)).theta()
+    # 16. Nasolabial angle  (Cm-Sn-UL, norm 90-110°)
+    if Sn and Cm and UL:
+        nasol = Angle(Vector(Sn, Cm), Vector(Sn, UL)).theta()
         results.append(_interpret_angle("Nasolabial(°)", nasol, 90, 110))
     else:
         results.append(["Nasolabial(°)", 90, 0, 110])
 
     # 17. Upper Lip to S-Line  (norm -2 to 2 mm)
-    if SoftPog and Columella and UpperLip:
-        ul_mm = point_to_line_distance_signed(UpperLip.x, UpperLip.y, SoftPog, Columella) * MM_PER_PIXEL
+    if Pog_soft and Cm and UL:
+        ul_mm = point_to_line_distance_signed(UL.x, UL.y, Pog_soft, Cm) * MM_PER_PIXEL
         results.append(["UL-SLine(mm)", -2, round(ul_mm, 2), 2])
     else:
         results.append(["UL-SLine(mm)", -2, 0, 2])
 
     # 18. Lower Lip to S-Line  (norm -2 to 2 mm)
-    if SoftPog and Columella and LowerLip:
-        ll_mm = point_to_line_distance_signed(LowerLip.x, LowerLip.y, SoftPog, Columella) * MM_PER_PIXEL
+    if Pog_soft and Cm and LL:
+        ll_mm = point_to_line_distance_signed(LL.x, LL.y, Pog_soft, Cm) * MM_PER_PIXEL
         results.append(["LL-SLine(mm)", -2, round(ll_mm, 2), 2])
     else:
         results.append(["LL-SLine(mm)", -2, 0, 2])
@@ -478,7 +466,7 @@ def get_placeholder_measurements():
     ]
 
 
-def interpret_measurements(measurements):
+def _interpret_measurements_fallback(measurements):
     """Return two lists of interpretation strings: [clinical, layman] per measurement."""
     clinical = []
     layman = []
@@ -700,6 +688,132 @@ def interpret_measurements(measurements):
             layman.append("")
 
     return clinical, layman
+
+
+# =============================================================================
+# LLM-powered interpretation via Groq (Llama 3.3 70B)
+# =============================================================================
+
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = "llama-3.3-70b-versatile"
+
+_SYSTEM_PROMPT = """You are an expert orthodontist and cephalometric analyst. You will receive a table of cephalometric measurements with their normal ranges, the patient's values, and each measurement's status (NORMAL or ABNORMAL). You will also receive the skeletal classification determined by the system.
+
+STRICT RULES FOR SUMMARIES:
+- You MUST explicitly discuss every measurement that is marked ABNORMAL in your summaries. Do not give a generic "relatively normal" summary when any key finding is abnormal.
+- When Overjet(mm) or Overbite(mm) are ABNORMAL, you MUST address them clearly in BOTH summary_clinical and summary_patient — e.g. increased overjet, deep overbite, open bite, etc. These are highly visible and clinically important; never gloss over them.
+- When any skeletal, dental, or soft-tissue measurement is ABNORMAL, name it and explain its significance in the summaries. Prioritize abnormal findings over normal ones.
+- Only describe the case as "normal" or "relatively normal" if the vast majority of measurements are NORMAL and no major findings (skeletal class, overjet, overbite, key angles) are abnormal.
+
+Use the provided statuses and skeletal classification as your baseline. If the overall pattern gives you strong clinical reason to nuance an individual status, you may do so but must explain why. Analyze ALL measurements together for a complete clinical picture.
+
+Return your response as valid JSON with exactly this structure:
+{
+  "clinical": ["interpretation for measurement 1", "interpretation for measurement 2", ...],
+  "layman": ["plain-english explanation 1", "plain-english explanation 2", ...],
+  "summary_clinical": "A 2-4 sentence holistic clinical summary. Must explicitly mention all ABNORMAL findings and their significance.",
+  "summary_patient": "A 2-4 sentence summary in simple plain English. Must clearly explain any overbite/overjet or other abnormal findings in everyday terms."
+}
+
+CRITICAL — array length and order:
+- The table you receive has a fixed number of measurement rows. Your "clinical" and "layman" arrays MUST each contain exactly that many entries — one string per row, in the same order as the table. No fewer, no more.
+- Entry 1 in clinical and layman = first row in the table, entry 2 = second row, and so on. Do not skip, merge, or reorder.
+- Before returning, verify: len(clinical) == number of table rows and len(layman) == number of table rows.
+
+Rules:
+- Clinical interpretations: proper orthodontic terminology; reference how each finding relates to the overall pattern.
+- Layman interpretations: simple enough for a patient with no medical background.
+- If a measurement value is 0, say "No data available." for both clinical and layman.
+- Keep each individual interpretation to 1-2 sentences.
+- Do NOT include markdown or code fences — only raw JSON."""
+
+
+def interpret_measurements_llm(measurements, skeletal_class="N/A"):
+    """Call Groq (Llama 3.3 70B) to interpret measurements holistically.
+    Returns (clinical_list, layman_list, summary_str).
+    Falls back to hard-coded interpretations on failure.
+    """
+    if not GROQ_API_KEY:
+        logger.warning("GROQ_API_KEY not set — using fallback interpretations")
+        c, l = _interpret_measurements_fallback(measurements)
+        return c, l, "", ""
+
+    table_lines = ["Measurement | Min | Value | Max | Status"]
+    table_lines.append("---|---|---|---|---")
+    for row in measurements:
+        name, lo, val, hi = row[0], row[1], row[2], row[3]
+        if val == 0:
+            status = "NO DATA"
+        elif lo <= val <= hi:
+            status = "NORMAL"
+        else:
+            status = "ABNORMAL"
+        table_lines.append(f"{name} | {lo} | {val} | {hi} | {status}")
+    table_str = "\n".join(table_lines)
+
+    n = len(measurements)
+    order_list = ", ".join(row[0] for row in measurements)
+    user_msg = (
+        f"Skeletal classification (determined by system): {skeletal_class}\n\n"
+        f"Cephalometric measurements ({n} rows):\n\n{table_str}\n\n"
+        f"Required: Output exactly {n} entries in 'clinical' and exactly {n} entries in 'layman', in this order: {order_list}. "
+        f"One string per measurement, same order as the table. Respect the Status column and skeletal classification above."
+    )
+
+    payload = {
+        "model": GROQ_MODEL,
+        "messages": [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": user_msg},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 4096,
+        "response_format": {"type": "json_object"},
+    }
+
+    try:
+        resp = requests.post(
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+
+        text = result["choices"][0]["message"]["content"].strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            text = text.strip()
+
+        parsed = json.loads(text)
+        clinical = parsed["clinical"]
+        layman = parsed["layman"]
+        summary_clinical = parsed.get("summary_clinical", "")
+        summary_patient = parsed.get("summary_patient", "")
+
+        if len(clinical) != len(measurements) or len(layman) != len(measurements):
+            logger.warning("LLM returned wrong number of interpretations, using fallback")
+            c, l = _interpret_measurements_fallback(measurements)
+            return c, l, summary_clinical, summary_patient
+
+        return clinical, layman, summary_clinical, summary_patient
+
+    except Exception as e:
+        logger.warning("Groq API call failed (%s), using fallback", e)
+        c, l = _interpret_measurements_fallback(measurements)
+        return c, l, "", ""
+
+
+def interpret_measurements(measurements, skeletal_class="N/A"):
+    """Public wrapper — tries LLM first, falls back to hard-coded."""
+    return interpret_measurements_llm(measurements, skeletal_class=skeletal_class)
 
 
 # =============================================================================

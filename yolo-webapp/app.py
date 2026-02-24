@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, url_for, render_template, jsonify
+from flask import Flask, request, redirect, url_for, render_template, jsonify, make_response
 from werkzeug.utils import secure_filename
 import os
 from image_processor import (
@@ -84,7 +84,8 @@ def uploaded_file(filename):
     error = stored.get('error', '')
     quality = stored.get('quality')
     keypoint_confidence = stored.get('keypoint_confidence')
-    clinical_interp, layman_interp = interpret_measurements(data)
+    # Always recompute interpretations from current data (including after Save & Re-analyze)
+    clinical_interp, layman_interp, ai_summary_clinical, ai_summary_patient = interpret_measurements(data, skeletal_class=skeletal_class)
     points_path = _points_path_for_result_image(f"rotated_{filename}")
     landmark_coords = {}
     extra_landmarks = {}
@@ -92,12 +93,20 @@ def uploaded_file(filename):
         raw_coords = read_points_file(points_path)
         landmark_coords = coords_for_frontend(raw_coords)
         extra_landmarks = extra_coords_for_frontend(raw_coords)
-    return render_template('uploaded.html', filename=filename, data=data,
+    resp = render_template('uploaded.html', filename=filename, data=data,
                            skeletal_class=skeletal_class, error=error,
                            quality=quality, keypoint_confidence=keypoint_confidence,
                            clinical_interp=clinical_interp, layman_interp=layman_interp,
+                           ai_summary_clinical=ai_summary_clinical,
+                           ai_summary_patient=ai_summary_patient,
                            landmark_coords=landmark_coords,
                            extra_landmarks=extra_landmarks)
+    # Prevent caching so Save & Re-analyze always shows fresh LLM output
+    response = make_response(resp)
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 def _points_path_for_result_image(filename):
     """Path to the points file for a result image e.g. rotated_test.png -> .../rotated_test_points.txt."""
